@@ -23,10 +23,9 @@ class AdwinK(DriftDetector):
         if self._detectors is None:
             self._detectors = [ADWIN(delta=self.delta) for _ in range(ndims)]
         changes = []
-        for dim, val in enumerate(input_value):
-            self._detectors[dim].add_element(val)
-            if self._detectors[dim].detected_change():
-                changes.append(dim)
+        for dim in range(input_value.shape[-1]):
+            values = input_value[:, dim]  # we assume batches
+            self._detectors[dim].add_element(values)
         if len(changes) > self.k * ndims:
             self.in_concept_change = True
             self.last_detection_point = self.seen_elements
