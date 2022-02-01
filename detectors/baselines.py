@@ -1,9 +1,13 @@
 import numpy as np
-from skmultiflow.drift_detection.base_drift_detector import BaseDriftDetector
 from skmultiflow.drift_detection import ADWIN
+from .abstract import DriftDetector
 
 
-class AdwinK(BaseDriftDetector):
+class AdwinK(DriftDetector):
+
+    def pre_train(self, data):
+        pass
+
     def __init__(self, delta: float, k: float = 0.1):
         self.delta = delta
         self.k = k
