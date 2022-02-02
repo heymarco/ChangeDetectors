@@ -49,6 +49,7 @@ class WATCH(DriftDetector):
         self.D = []
         self.last_change_point = None
         self.last_detection_point = None
+        super(WATCH, self).__init__()
 
     def _wasserstein(self, B_i, D) -> float:
         dist = [wasserstein_distance(B_i[:, j], D[:, j]) for j in range(B_i.shape[-1])]
