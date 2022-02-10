@@ -7,6 +7,9 @@ from .d3 import D3_impl
 
 class AdwinK(DriftDetector):
 
+    def metric(self):
+        return self._metric
+
     def pre_train(self, data):
         pass
 
@@ -17,6 +20,7 @@ class AdwinK(DriftDetector):
         self.n_seen_elements = 0
         self.last_change_point = None
         self.last_detection_point = None
+        self._metric = 0.0
         super(AdwinK, self).__init__()
 
     def add_element(self, input_value):
@@ -28,7 +32,8 @@ class AdwinK(DriftDetector):
         for dim in range(input_value.shape[-1]):
             values = input_value[:, dim]  # we assume batches
             self._detectors[dim].add_element(values)
-        if len(changes) > self.k * ndims:
+        self._metric = len(changes) / ndims
+        if self.metric() > self.k:
             self.in_concept_change = True
             self.last_detection_point = self.n_seen_elements
             delay = np.mean([
@@ -106,6 +111,9 @@ class WATCH(DriftDetector):
         max_in_D = np.max(self._wasserstein(B, self._D_as_set()) for B in self.D)
         self.eta = self.epsilon * max_in_D
 
+    def metric(self):
+        return self._v()
+
 
 class D3(DriftDetector):
     def __init__(self, w, rho, auc):
@@ -133,3 +141,6 @@ class D3(DriftDetector):
             self.last_change_point = self.last_detection_point
         else:
             self.in_concept_change = False
+
+    def metric(self):
+        return self._d3.auc.get()

@@ -60,7 +60,7 @@ class D3_impl():
         self.store_labels = False
         self.old_data_window_index = 0
         self.new_data_window_index = 0
-        self.auc = ROCAUC(n_thresholds=D3._AUC_NUM_THRESHOLDS)
+        self.auc = ROCAUC(n_thresholds=D3_impl._AUC_NUM_THRESHOLDS)
 
         super().reset()
 
@@ -85,7 +85,7 @@ class D3_impl():
         self.new_data_window_index = 0
         self.data_labels = None
         self.store_labels = False
-        self.auc = ROCAUC(n_thresholds=D3._AUC_NUM_THRESHOLDS)
+        self.auc = ROCAUC(n_thresholds=D3_impl._AUC_NUM_THRESHOLDS)
         self.discriminative_classifier = self.discriminative_classifier.clone()
 
     def update(self, sample, label=None):
@@ -123,14 +123,14 @@ class D3_impl():
         old_data_sample = self.old_data_window[self.new_data_window_index]
         self.discriminative_classifier.learn_one(sample, D3._LABEL_FOR_NEW_DATA)
         self.discriminative_classifier.learn_one(
-            old_data_sample, D3._LABEL_FOR_OLD_DATA
+            old_data_sample, D3_impl._LABEL_FOR_OLD_DATA
         )
 
         # Update AUC
         prob_new = self.discriminative_classifier.predict_proba_one(sample)[1]
         prob_old = self.discriminative_classifier.predict_proba_one(old_data_sample)[1]
-        self.auc = self.auc.update(D3._LABEL_FOR_NEW_DATA, prob_new)
-        self.auc = self.auc.update(D3._LABEL_FOR_OLD_DATA, prob_old)
+        self.auc = self.auc.update(D3_impl._LABEL_FOR_NEW_DATA, prob_new)
+        self.auc = self.auc.update(D3_impl._LABEL_FOR_OLD_DATA, prob_old)
 
         self.new_data_window_index += 1
 
@@ -142,7 +142,7 @@ class D3_impl():
                 self._in_concept_change = True
             self.old_data_window = deepcopy(self.new_data_window)
             self.new_data_window_index = 0
-            self.auc = ROCAUC(n_thresholds=D3._AUC_NUM_THRESHOLDS)
+            self.auc = ROCAUC(n_thresholds=D3_impl._AUC_NUM_THRESHOLDS)
             self.discriminative_classifier = self.discriminative_classifier.clone()
 
         return self._in_concept_change, self._in_warning_zone

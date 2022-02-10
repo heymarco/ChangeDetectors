@@ -8,6 +8,10 @@ class DriftDetector(BaseDriftDetector, ABC):
     def pre_train(self, data):
         raise NotImplementedError()
 
+    @abstractmethod
+    def metric(self):
+        raise NotImplementedError()
+
 
 class RegionalDriftDetector(DriftDetector, ABC):
     @abstractmethod
