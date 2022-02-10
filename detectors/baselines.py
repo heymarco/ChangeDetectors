@@ -2,6 +2,7 @@ import numpy as np
 from scipy.stats import wasserstein_distance
 from skmultiflow.drift_detection import ADWIN
 from .abstract import DriftDetector
+from .d3 import D3_impl
 
 
 class AdwinK(DriftDetector):
@@ -34,6 +35,8 @@ class AdwinK(DriftDetector):
                 self._detectors[dim].delay for dim in changes
             ]).astype(int)
             self.last_change_point = self.last_detection_point - delay
+        else:
+            self.in_concept_change = False
 
 
 class WATCH(DriftDetector):
@@ -102,3 +105,37 @@ class WATCH(DriftDetector):
     def _update_eta(self):
         max_in_D = np.max(self._wasserstein(B, self._D_as_set()) for B in self.D)
         self.eta = self.epsilon * max_in_D
+
+
+class D3(DriftDetector):
+
+    def __init__(self, w, rho, auc):
+        self._d3: D3_impl = None
+        self.w = w
+        self.rho = rho
+        self.auc = auc
+        self.last_change_point = None
+        self.last_detection_point = None
+        self.n_seen_elements = 0
+        super(D3, self).__init__()
+
+    def pre_train(self, data):
+        pass
+
+    def add_element(self, input_value):
+        self.n_seen_elements += 1
+        if self._d3 is None:
+            dims = input_value.shape[-1]
+            D3_impl(self.w, self.rho, dims, self.auc)
+        dummy_label = 0
+        if self._d3.isEmpty():
+            self._d3.addInstance(input_value, dummy_label)
+        else:
+            if self._d3.driftCheck():
+                self._d3.addInstance(input_value, dummy_label)
+                self.in_concept_change = True
+                self.last_detection_point = self.n_seen_elements
+                self.last_change_point = self.last_detection_point
+            else:
+                self.in_concept_change = False
+                self._d3.addInstance(input_value, dummy_label)
