@@ -1,2 +1,2 @@
 from .baselines import *
-from .abstract import DriftDetector
+from .abstract import DriftDetector, RegionalDriftDetector
