@@ -1,97 +1,148 @@
 import numpy as np
 import pandas as pd
+from copy import deepcopy
 
-from sklearn.metrics import roc_auc_score as AUC
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedKFold
-from sklearn.preprocessing import MinMaxScaler
-
-
-def drift_detector(S, T, threshold=0.75):
-    T = pd.DataFrame(T)
-    S = pd.DataFrame(S)
-    # Give slack variable in_target which is 1 for old and 0 for new
-    T['in_target'] = 0  # in target set
-    S['in_target'] = 1  # in source set
-    # Combine source and target with new slack variable
-    ST = pd.concat([T, S], ignore_index=True, axis=0)
-    labels = ST['in_target'].values
-    ST = ST.drop('in_target', axis=1).values
-    # You can use any classifier for this step. We advise it to be a simple one as we want to see whether source
-    # and target differ not to classify them.
-    clf = LogisticRegression(solver='liblinear')
-    predictions = np.zeros(labels.shape)
-    # Divide ST into two equal chunks
-    # Train LR on a chunk and classify the other chunk
-    # Calculate AUC for original labels (in_target) and predicted ones
-    skf = StratifiedKFold(n_splits=2, shuffle=True)
-    for train_idx, test_idx in skf.split(ST, labels):
-        X_train, X_test = ST[train_idx], ST[test_idx]
-        y_train, y_test = labels[train_idx], labels[test_idx]
-        clf.fit(X_train, y_train)
-        probs = clf.predict_proba(X_test)[:, 1]
-        predictions[test_idx] = probs
-    auc_score = AUC(labels, predictions)
-    # Signal drift if AUC is larger than the threshold
-    if auc_score > threshold:
-        return True
-    else:
-        return False
+from river.tree import HoeffdingTreeClassifier
+from river.metrics import ROCAUC
 
 
 class D3_impl():
-    def __init__(self, w, rho, dim, auc):
-        self.size = int(w * (1 + rho))
-        self.win_data = np.zeros((self.size, dim))
-        self.win_label = np.zeros(self.size)
-        self.w = w
-        self.rho = rho
-        self.dim = dim
-        self.auc = auc
-        self.drift_count = 0
-        self.window_index = 0
+    r"""Drift Detection Method
+    D3 (Discriminative Drift Detector) is an unsupervised drift detection
+    method which uses a discriminative classifier that can be used with any
+    online algorithm without a built-in drift detector. It holds a fixed
+    size sliding window of the latest data having two sets: the old and the
+    new. A simple classifier is trained to distinguish these sets. It
+    detects a drift with respect to classifier performance (AUC).
+    Parameters
+    ----------
+    window_size
+        The size of the data window.
+    auc_threshold
+        Required AUC score to signal a drift.
+        From 0.5 to 1.0
+    discriminative_classifier
+        Classifier to be used to distinguish old data from the new data.
+        Any classifier in the river can be used.
+    Notes
+    -----
+    * This method looks for drifts in multi-dimensional data.
+    * It is advised to use a simple model as a discriminative classifier
+      since the goal of it is to determine if the old data and the new data
+      are seperable, not to classify them.
+    * This implementation differs from the original one in the paper,
+      making the size of the old and new data windows equal, and allowing
+      to use any classifier for discriminating old and new data.
+    References
+    ----------
+    [^1]: Ömer Gözüaçık, Alican Büyükçakır, Hamed Bonab, Fazli Can: Unsupervised concept drift detection with a discriminative classifier. CIKM 2019: 2365-2368
+    """
 
-    def addInstance(self, X, y):
-        if (self.isEmpty()):
-            self.win_data[self.window_index] = X
-            self.win_label[self.window_index] = y
-            self.window_index = self.window_index + 1
-        else:
-            print("Error: Buffer is full!")
+    _AUC_NUM_THRESHOLDS = 20
+    _LABEL_FOR_NEW_DATA = True
+    _LABEL_FOR_OLD_DATA = False
 
-    def isEmpty(self):
-        return self.window_index < self.size
+    def __init__(
+            self,
+            window_size=200,
+            auc_threshold=0.7,
+            discriminative_classifier=HoeffdingTreeClassifier(
+                grace_period=40, max_depth=3
+            ),
+    ):
+        super().__init__()
+        self.auc_threshold = auc_threshold
+        self.sub_window_size = int(window_size / 2)
+        self.discriminative_classifier = discriminative_classifier
+        self.old_data_window = [None] * self.sub_window_size
+        self.new_data_window = [None] * self.sub_window_size
+        self.data_labels = None
+        self.store_labels = False
+        self.old_data_window_index = 0
+        self.new_data_window_index = 0
+        self.auc = ROCAUC(n_thresholds=D3._AUC_NUM_THRESHOLDS)
 
-    def driftCheck(self):
-        if drift_detector(self.win_data[:self.w],
-                          self.win_data[self.w:self.size], self.auc):  # returns true if drift is detected
-            self.window_index = int(self.w * self.rho)
-            self.win_data = np.roll(self.win_data, -1 * self.w, axis=0)
-            self.win_label = np.roll(self.win_label, -1 * self.w, axis=0)
-            self.drift_count = self.drift_count + 1
-            return True
-        else:
-            self.window_index = self.w
-            self.win_data = np.roll(self.win_data, -1 * (int(self.w * self.rho)), axis=0)
-            self.win_label = np.roll(self.win_label, -1 * (int(self.w * self.rho)), axis=0)
-            return False
+        super().reset()
 
-    def getCurrentData(self):
-        return self.win_data[:self.window_index]
+    def current_data_and_labels(self):
+        """Returns the data and labels for the current data window.
+        They can be used when for retraining the stream classifier after drift detection.
+        """
+        return self.old_data_window, self.data_labels
 
-    def getCurrentLabels(self):
-        return self.win_label[:self.window_index]
+    def update_labels_if_storing_enabled(self, index, label):
+        """Update the labels array if storing is enabled"""
+        if not self.store_labels:
+            return
+        self.data_labels[index] = label
 
+    def reset(self):
+        """Reset the change detector."""
+        super().reset()
+        self.old_data_window = [None] * self.sub_window_size
+        self.new_data_window = [None] * self.sub_window_size
+        self.old_data_window_index = 0
+        self.new_data_window_index = 0
+        self.data_labels = None
+        self.store_labels = False
+        self.auc = ROCAUC(n_thresholds=D3._AUC_NUM_THRESHOLDS)
+        self.discriminative_classifier = self.discriminative_classifier.clone()
 
-def select_data(x):
-    df = pd.read_csv(x)
-    scaler = MinMaxScaler()
-    df.iloc[:, 0:df.shape[1] - 1] = scaler.fit_transform(df.iloc[:, 0:df.shape[1] - 1])
-    return df
+    def update(self, sample, label=None):
+        """Update the change detector with a single sample.
+        Parameters
+        ----------
+        sample
+            An instance from the data stream (dict) having N items (number of features).
+        label
+            Class label for sample.
+        Notes
+        -----
+        * The label is is not used in the detection process. It can be set to None.
+        * If the label is not set to None, D3 will store the last window_size/2
+          class labels of the samples. It is useful for retraining the stream classifier
+          when a drift is detected.
+        """
+        if self._in_concept_change:
+            self._in_concept_change = False
 
+        # Start storing labels if not None
+        if (label is not None) and (self.store_labels is False):
+            self.data_labels = [None] * self.sub_window_size
+            self.store_labels = True
 
-def check_true(y, y_hat):
-    if (y == y_hat):
-        return 1
-    else:
-        return 0
+        if self.old_data_window_index < self.sub_window_size:
+            self.old_data_window[self.old_data_window_index] = sample
+            self.old_data_window_index += 1
+            return self._in_concept_change, self._in_warning_zone
+
+        self.new_data_window[self.new_data_window_index] = sample
+        self.update_labels_if_storing_enabled(self.new_data_window_index, label)
+
+        # Updating discriminative classifier with a sample from the old and new data
+        old_data_sample = self.old_data_window[self.new_data_window_index]
+        self.discriminative_classifier.learn_one(sample, D3._LABEL_FOR_NEW_DATA)
+        self.discriminative_classifier.learn_one(
+            old_data_sample, D3._LABEL_FOR_OLD_DATA
+        )
+
+        # Update AUC
+        prob_new = self.discriminative_classifier.predict_proba_one(sample)[1]
+        prob_old = self.discriminative_classifier.predict_proba_one(old_data_sample)[1]
+        self.auc = self.auc.update(D3._LABEL_FOR_NEW_DATA, prob_new)
+        self.auc = self.auc.update(D3._LABEL_FOR_OLD_DATA, prob_old)
+
+        self.new_data_window_index += 1
+
+        if self.new_data_window_index == self.sub_window_size:
+            auc_score = self.auc.get()
+            if (auc_score > self.auc_threshold) or (
+                    auc_score < self.auc_threshold - 0.5
+            ):
+                self._in_concept_change = True
+            self.old_data_window = deepcopy(self.new_data_window)
+            self.new_data_window_index = 0
+            self.auc = ROCAUC(n_thresholds=D3._AUC_NUM_THRESHOLDS)
+            self.discriminative_classifier = self.discriminative_classifier.clone()
+
+        return self._in_concept_change, self._in_warning_zone

@@ -108,7 +108,6 @@ class WATCH(DriftDetector):
 
 
 class D3(DriftDetector):
-
     def __init__(self, w, rho, auc):
         self._d3: D3_impl = None
         self.w = w
@@ -126,16 +125,11 @@ class D3(DriftDetector):
         self.n_seen_elements += 1
         if self._d3 is None:
             dims = input_value.shape[-1]
-            D3_impl(self.w, self.rho, dims, self.auc)
-        dummy_label = 0
-        if self._d3.isEmpty():
-            self._d3.addInstance(input_value, dummy_label)
+            self._d3 = D3_impl(self.w, self.rho, dims, self.auc)
+        in_drift, in_warning = self._d3.update(input_value)
+        if in_drift():
+            self.in_concept_change = True
+            self.last_detection_point = self.n_seen_elements
+            self.last_change_point = self.last_detection_point
         else:
-            if self._d3.driftCheck():
-                self._d3.addInstance(input_value, dummy_label)
-                self.in_concept_change = True
-                self.last_detection_point = self.n_seen_elements
-                self.last_change_point = self.last_detection_point
-            else:
-                self.in_concept_change = False
-                self._d3.addInstance(input_value, dummy_label)
+            self.in_concept_change = False
