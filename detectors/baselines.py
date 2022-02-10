@@ -1,4 +1,5 @@
 import numpy as np
+from river.tree import HoeffdingTreeClassifier
 from scipy.stats import wasserstein_distance
 from skmultiflow.drift_detection import ADWIN
 from .abstract import DriftDetector
@@ -116,11 +117,13 @@ class WATCH(DriftDetector):
 
 
 class D3(DriftDetector):
-    def __init__(self, w, rho, auc):
+    def __init__(self, window_size=200,
+                 auc_threshold=0.7,
+                 discriminative_classifier=HoeffdingTreeClassifier(grace_period=40, max_depth=3),):
         self._d3: D3_impl = None
-        self.w = w
-        self.rho = rho
-        self.auc = auc
+        self.window_size = window_size
+        self.auc_thresh = auc_threshold
+        self.classifier = discriminative_classifier
         self.last_change_point = None
         self.last_detection_point = None
         self.n_seen_elements = 0
@@ -133,7 +136,7 @@ class D3(DriftDetector):
         self.n_seen_elements += 1
         if self._d3 is None:
             dims = input_value.shape[-1]
-            self._d3 = D3_impl(self.w, self.rho, dims, self.auc)
+            self._d3 = D3_impl(self.window_size, self.auc_thresh, self.classifier)
         in_drift, in_warning = self._d3.update(input_value)
         if in_drift():
             self.in_concept_change = True
