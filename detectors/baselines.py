@@ -2,8 +2,9 @@ import numpy as np
 from scipy.stats import wasserstein_distance
 from skmultiflow.drift_detection import ADWIN
 from sklearn.metrics import roc_auc_score
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LinearRegression
 from .abstract import DriftDetector
-from skmultiflow import trees
 
 
 class AdwinK(DriftDetector):
@@ -187,7 +188,8 @@ class WATCH2(DriftDetector):
 
 
 class D3(DriftDetector):
-    def __init__(self, w: int = 100, roh: float = 0.1, tau: float = 0.7):
+    def __init__(self, w: int = 100, roh: float = 0.5, tau: float = 0.7,
+                 classifier=DecisionTreeClassifier(max_depth=1)):
         """
         Unsupervised Concept Drift Detection with a Discriminative Classifier
         https://dl.acm.org/doi/10.1145/3357384.3358144
@@ -196,6 +198,7 @@ class D3(DriftDetector):
         :param roh: the relative size of the new window compared to the old window
         :param tau: the threshold of the area under the ROC.
         """
+        self.classifier = classifier
         self.w = w
         self.roh = roh
         self.tau = tau
@@ -203,7 +206,6 @@ class D3(DriftDetector):
         self.last_detection_point = None
         self.n_seen_elements = 0
         self.window = []
-        self.classifier = trees.HoeffdingTreeClassifier()
         self.max_window_size = int(w * (1 + roh))
         self._metric = 0.5
         super(D3, self).__init__()
@@ -213,6 +215,7 @@ class D3(DriftDetector):
 
     def add_element(self, input_value):
         self.n_seen_elements += 1
+        self.in_concept_change = False
         if len(self.window) < self.max_window_size:
             self._update_window(input_value)
         else:
@@ -229,7 +232,6 @@ class D3(DriftDetector):
                 self.last_change_point = self.n_seen_elements - int(self.w * self.roh)
                 self.window = self.window[-self.w:]
             else:
-                self.in_concept_change = False
                 self.window = self.window[-int(self.w * self.roh):]
 
     def metric(self):
