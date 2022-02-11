@@ -1,13 +1,12 @@
 import numpy as np
-from river.tree import HoeffdingTreeClassifier
 from scipy.stats import wasserstein_distance
 from skmultiflow.drift_detection import ADWIN
+from sklearn.metrics import roc_auc_score
 from .abstract import DriftDetector
-from .d3 import D3_impl
+from skmultiflow import trees
 
 
 class AdwinK(DriftDetector):
-
     def metric(self):
         return self._metric
 
@@ -116,17 +115,96 @@ class WATCH(DriftDetector):
         return self._v()
 
 
+class WATCH2(DriftDetector):
+
+    def __init__(self, kappa: int, mu: int, epsilon: float, omega: int):
+        self.n_seen_elements = 0
+        self.kappa = kappa
+        self.mu = mu
+        self.epsilon = epsilon
+        self.omega = omega
+        self.max_distance = 0
+        self.eta = 0.0
+        self.D = []
+        self.last_change_point = None
+        self.last_detection_point = None
+        super(WATCH2, self).__init__()
+
+    def _wasserstein(self, B_i, D) -> float:
+        dist = [wasserstein_distance(B_i[:, j], D[:, j]) for j in range(B_i.shape[-1])]
+        return np.mean(dist)
+
+    def pre_train(self, data: np.ndarray):
+        if len(data.shape) == 2:
+            if len(data) % self.omega != 0:
+                data = data[:-len(data) % self.omega]
+            data.reshape(shape=(int(len(data) / self.omega), self.omega, data.shape[-1]))
+        if len(data) * self.omega < self.kappa:
+            print("We need at least kappa data points to start change detection")
+        self.wdistances = []
+        for batch in data:
+            self.D.append(batch)
+            self.max_distance = max(self.max_distance, self._wasserstein(batch, self._D_as_set()))
+
+    def add_element(self, input_value):
+        assert len(input_value) == self.omega
+        self.n_seen_elements += self.omega
+        if len(self._D_as_set()) < self.kappa:
+            self.D.append(input_value)
+            if len(self._D_as_set()) >= self.kappa:
+                self._update_eta()
+        else:
+            this_distance = self._wasserstein(input_value, self.D)
+            self.max_distance = max(self.max_distance, this_distance)
+            if self._v() > self.eta:
+                self.in_concept_change = True
+                self.last_detection_point = self.n_seen_elements
+                self.last_change_point = self.n_seen_elements
+                self.reset()
+                self.D = [input_value]
+            else:
+                if len(self._D_as_set() < self.mu):
+                    self.D.append(input_value)
+                    self._update_eta()
+
+    def reset(self):
+        self.D = []
+        self.eta = 0.0
+        self.max_distance = 0.0
+
+    def _D_as_set(self):
+        return np.concatenate(self.D, axis=0)
+
+    def _v(self):
+        return self.epsilon * self.max_distance
+
+    def _update_eta(self):
+        median = np.median(self._wasserstein(B, self._D_as_set()) for B in self.D)
+        self.eta = self.epsilon * median
+
+    def metric(self):
+        return self._v()
+
+
 class D3(DriftDetector):
-    def __init__(self, window_size=200,
-                 auc_threshold=0.7,
-                 discriminative_classifier=HoeffdingTreeClassifier(grace_period=40, max_depth=3),):
-        self._d3: D3_impl = None
-        self.window_size = window_size
-        self.auc_thresh = auc_threshold
-        self.classifier = discriminative_classifier
+    def __init__(self, w: int = 200, roh: float = 0.5, tau: float = 0.8):
+        """
+        Unsupervised Concept Drift Detection with a Discriminative Classifier
+        https://dl.acm.org/doi/10.1145/3357384.3358144
+        :param w: the size of the 'old' window
+        :param roh: the relative size of the new window compared to the old window
+        :param tau: the threshold of the area under the ROC.
+        """
+        self.w = w
+        self.roh = roh
+        self.tau = tau
         self.last_change_point = None
         self.last_detection_point = None
         self.n_seen_elements = 0
+        self.window = []
+        self.classifier = trees.HoeffdingTreeClassifier()
+        self.max_window_size = int(w * (1 + roh))
+        self._metric = 0.5
         super(D3, self).__init__()
 
     def pre_train(self, data):
@@ -134,16 +212,30 @@ class D3(DriftDetector):
 
     def add_element(self, input_value):
         self.n_seen_elements += 1
-        if self._d3 is None:
-            dims = input_value.shape[-1]
-            self._d3 = D3_impl(self.window_size, self.auc_thresh, self.classifier)
-        in_drift, in_warning = self._d3.update(input_value)
-        if in_drift():
-            self.in_concept_change = True
-            self.last_detection_point = self.n_seen_elements
-            self.last_change_point = self.last_detection_point
+        if len(self.window) < self.max_window_size:
+            self._update_window(input_value)
         else:
-            self.in_concept_change = False
+            labels_0 = [0 for _ in range(self.w)]
+            labels_1 = [1 for _ in range(int(self.w * self.roh))]
+            labels = np.asarray(labels_0 + labels_1)
+            arr = np.asarray(self.window)
+            self.classifier.fit(arr, labels)
+            probas = self.classifier.predict_proba(arr)[:, 1]
+            self._metric = roc_auc_score(labels, probas)
+            if self._metric >= self.tau:
+                self.in_concept_change = True
+                self.last_detection_point = self.n_seen_elements
+                self.last_change_point = self.n_seen_elements - int(self.w * self.roh)
+                self.window = self.window[-self.w:]
+            else:
+                self.in_concept_change = False
+                self.window = self.window[-int(self.w * self.roh):]
 
     def metric(self):
-        return self._d3.auc.get()
+        return self._metric
+
+    def _update_window(self, new_value):
+        for element in new_value:
+            self.window.append(element)
+        if len(self.window) > self.max_window_size:
+            self.window = self.window[-self.max_window_size:]
