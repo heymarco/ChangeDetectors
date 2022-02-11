@@ -187,10 +187,11 @@ class WATCH2(DriftDetector):
 
 
 class D3(DriftDetector):
-    def __init__(self, w: int = 200, roh: float = 0.5, tau: float = 0.8):
+    def __init__(self, w: int = 100, roh: float = 0.1, tau: float = 0.7):
         """
         Unsupervised Concept Drift Detection with a Discriminative Classifier
         https://dl.acm.org/doi/10.1145/3357384.3358144
+        The default parameters are those recommended in the paper.
         :param w: the size of the 'old' window
         :param roh: the relative size of the new window compared to the old window
         :param tau: the threshold of the area under the ROC.
