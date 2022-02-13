@@ -1,8 +1,9 @@
-# StreamDatasets
+# Algorithms for concept drift detection in multivariate data
 
 ## Usage
 
-tbd
+- `from detectors import *`
+- then, choose the detector you want to use.
 
 ## Installation
 
