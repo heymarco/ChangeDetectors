@@ -45,8 +45,7 @@ class AdwinK(DriftDetector):
 
 
 class WATCH(DriftDetector):
-
-    def __init__(self, kappa: int, mu: int, epsilon: float, omega: int):
+    def __init__(self, kappa: int = 100, mu: int = 1000, epsilon: float = 3, omega: int = 50):
         self.n_seen_elements = 0
         self.kappa = kappa
         self.mu = mu
@@ -68,10 +67,8 @@ class WATCH(DriftDetector):
             if len(data) % self.omega != 0:
                 data = data[:-len(data) % self.omega]
             data.reshape(shape=(int(len(data) / self.omega), self.omega, data.shape[-1]))
-        if len(data) * self.omega < self.kappa:
-            print("We need at least kappa data points to start change detection")
         for batch in data:
-            self.D.append(batch)
+            self.add_element(batch)
 
     def add_element(self, input_value):
         assert len(input_value) == self.omega
@@ -97,7 +94,6 @@ class WATCH(DriftDetector):
     def reset(self):
         self.D = []
         self.eta = 0.0
-        self.max_distance = 0.0
 
     def _D_concatenated(self):
         return np.concatenate(self.D, axis=0)
