@@ -46,6 +46,14 @@ class AdwinK(DriftDetector):
 
 class WATCH(DriftDetector):
     def __init__(self, kappa: int = 100, mu: int = 1000, epsilon: float = 3, omega: int = 50):
+        """
+        WATCH: Wasserstein Change Point Detection for High-Dimensional Time Series Data
+        https://arxiv.org/abs/2201.07125
+        :param kappa: the minimum number of points that must be present in the current representation of distribution to trigger change point detection
+        :param mu: the maximum number of points that can be present in the current representation of distribution.
+        :param epsilon: the ratio controlling how distant the samples can be from the current distribution to be still considered a part of the same.
+        :param omega: size of the mini-batch in which the data are processed
+        """
         self.n_seen_elements = 0
         self.kappa = kappa
         self.mu = mu
@@ -71,7 +79,6 @@ class WATCH(DriftDetector):
             self.add_element(batch)
 
     def add_element(self, input_value):
-        assert len(input_value) == self.omega
         self.in_concept_change = False
         self.n_seen_elements += self.omega
         if len(self._D_concatenated()) < self.kappa:
@@ -79,27 +86,24 @@ class WATCH(DriftDetector):
             if len(self._D_concatenated()) >= self.kappa:
                 self._update_eta()
         else:
-            self._v = self._wasserstein(input_value, self.D)
+            self._v = self._wasserstein(input_value, self._D_concatenated())
             if self._v > self.eta:
                 self.in_concept_change = True
                 self.last_detection_point = self.n_seen_elements
                 self.last_change_point = self.n_seen_elements
-                self.reset()
                 self.D = [input_value]
             else:
-                if len(self._D_concatenated() < self.mu):
+                if len(self._D_concatenated()) < self.mu:
                     self.D.append(input_value)
                     self._update_eta()
 
-    def reset(self):
-        self.D = []
-        self.eta = 0.0
-
     def _D_concatenated(self):
+        if len(self.D) == 0:
+            return np.asarray(self.D)
         return np.concatenate(self.D, axis=0)
 
     def _update_eta(self):
-        max_in_D = np.max(self._wasserstein(B, self._D_concatenated()) for B in self.D)
+        max_in_D = np.max([self._wasserstein(B, self._D_concatenated()) for B in self.D])
         self.eta = self.epsilon * max_in_D
 
     def metric(self):
@@ -113,6 +117,7 @@ class D3(DriftDetector):
         Unsupervised Concept Drift Detection with a Discriminative Classifier
         https://dl.acm.org/doi/10.1145/3357384.3358144
         The default parameters are those recommended in the paper.
+        My experience so far: hard to tune, very sensitive to choice of tau and the classifier (and their combination)
         :param w: the size of the 'old' window
         :param roh: the relative size of the new window compared to the old window
         :param tau: the threshold of the area under the ROC.
