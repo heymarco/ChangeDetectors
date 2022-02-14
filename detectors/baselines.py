@@ -199,11 +199,10 @@ class LDDDIS(DriftDetector):
         self.last_change_point = None
         self.last_detection_point = None
         self.drift_dims = []
-        super(LDD_DIS, self).__init__()
+        super(LDDDIS, self).__init__()
 
     def add_element(self, input_value):
-        assert len(input_value) == self.batch_size
-        self.n_seen_elements += 1
+        self.n_seen_elements += len(input_value)
         self.in_concept_change = False
         if self.batch_2 is not None:
             self.batch_1 = self.batch_2
@@ -252,3 +251,70 @@ class LDDDIS(DriftDetector):
 
     def metric(self):
         return np.nan
+
+
+class IBDD(RegionalDriftDetector):
+    def __init__(self, w: int = 200, m: int = 10):
+        self.w = w
+        self.window = []
+        self._metric = np.nan
+        self.msd_scores = []
+        self.lower_thresh = np.nan
+        self.upper_thresh = np.nan
+        self.m = m
+        self.last_change_point = None
+        self.last_detection_point = None
+        self.n_seen_elements = 0
+        self.last_update = 0
+
+    def pre_train(self, data):
+        self.find_initial_threshold(np.array(data), n_runs=100)
+
+    def add_element(self, input_value):
+        for input in input_value:
+            self.window.append(input)
+        if len(self.window) > self.w:
+            self.window = self.window[-self.w:]
+        if len(self.window) % 2 == 1:
+            return
+        subwindow_size = int(len(self.window) / 2)
+        w1 = np.asarray(self.window[:subwindow_size])
+        w2 = np.asarray(self.window[subwindow_size:])
+        msd = self.msd(w1, w2)
+        self.msd_scores.append(msd)
+        outside_thresh = np.logical_or(
+            self.msd_scores[-self.m:] > self.upper_thresh,
+            self.msd_scores[-self.m:] < self.lower_thresh
+        )
+        if np.alltrue(outside_thresh):
+            self.in_concept_change = True
+            self.delay = subwindow_size
+            self.last_change_point = self.n_seen_elements - subwindow_size
+            self.last_detection_point = self.n_seen_elements
+            self.window = self.window[-subwindow_size:]
+        if self.n_seen_elements - self.last_update > 60:
+            update_vals = self.msd_scores[-50:]
+            self.lower_thresh = np.mean(update_vals) + 2 * np.std(update_vals)
+            self.upper_thresh = np.mean(update_vals) + 2 * np.std(update_vals)
+            self.last_update = self.n_seen_elements
+
+    def msd(self, w1, w2):
+        diff = w1 - w2
+        squared = np.power(diff, 2)
+        return np.mean(squared)
+
+    def find_initial_threshold(self, X, n_runs):
+        sequence = [i for i in range(len(X))]
+        scores = []
+        for i in range(0, n_runs):
+            rng = np.random.default_rng(i)
+            rng.shuffle(sequence)
+            w2 = X[sequence]
+            scores.append(self.msd(X, w2))
+        threshold1 = np.mean(scores) + 2 * np.std(scores)
+        threshold2 = np.mean(scores) - 2 * np.std(scores)
+        if threshold2 < 0:
+            threshold2 = 0
+        self.msd_scores = scores
+        self.lower_thresh = threshold2
+        self.upper_thresh = threshold1
