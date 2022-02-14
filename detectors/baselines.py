@@ -1,18 +1,14 @@
+from abc import ABC
+
 import numpy as np
 from scipy.stats import wasserstein_distance
 from skmultiflow.drift_detection import ADWIN
 from sklearn.metrics import roc_auc_score
 from sklearn.tree import DecisionTreeClassifier
-from .abstract import DriftDetector
+from .abstract import DriftDetector, RegionalDriftDetector
 
 
-class AdwinK(DriftDetector):
-    def metric(self):
-        return self._metric
-
-    def pre_train(self, data):
-        pass
-
+class AdwinK(RegionalDriftDetector):
     def __init__(self, delta: float, k: float = 0.1):
         self.delta = delta
         self.k = k
@@ -21,27 +17,43 @@ class AdwinK(DriftDetector):
         self.last_change_point = None
         self.last_detection_point = None
         self._metric = 0.0
+        self._drift_dims = None
         super(AdwinK, self).__init__()
 
     def add_element(self, input_value):
         ndims = input_value.shape[-1]
+        self.in_concept_change = False
+        changes = []
         self.n_seen_elements += 1
         if self._detectors is None:
             self._detectors = [ADWIN(delta=self.delta) for _ in range(ndims)]
-        changes = []
         for dim in range(input_value.shape[-1]):
             values = input_value[:, dim]  # we assume batches
             self._detectors[dim].add_element(values)
+            if self._detectors[dim].in_concept_change:
+                changes.append(dim)
         self._metric = len(changes) / ndims
-        if self.metric() > self.k:
+        if self._metric > self.k:
             self.in_concept_change = True
             self.last_detection_point = self.n_seen_elements
             delay = np.mean([
                 self._detectors[dim].delay for dim in changes
             ]).astype(int)
             self.last_change_point = self.last_detection_point - delay
-        else:
-            self.in_concept_change = False
+            self._drift_dims = np.zeros(ndims)
+            self._drift_dims[changes] = 1
+
+    def find_drift_dimensions(self):
+        return self._drift_dims
+
+    def plot_drift_dimensions(self):
+        pass
+
+    def metric(self):
+        return self._metric
+
+    def pre_train(self, data):
+        pass
 
 
 class WATCH(DriftDetector):
