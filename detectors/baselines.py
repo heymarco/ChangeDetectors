@@ -325,3 +325,11 @@ class IBDD(DriftDetector):
 
     def metric(self):
         return self._metric
+
+
+class IBDD2(IBDD):
+    def add_element(self, input_value):
+        super(IBDD2, self).add_element(input_value)
+        if self.in_concept_change:
+            self.pre_train(self.window[-self.m:])
+
