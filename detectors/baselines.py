@@ -1,10 +1,11 @@
 from abc import ABC
 
 import numpy as np
-from scipy.stats import wasserstein_distance
+from scipy.stats import wasserstein_distance, norm
 from skmultiflow.drift_detection import ADWIN
 from sklearn.metrics import roc_auc_score
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors import NearestNeighbors
 from .abstract import DriftDetector, RegionalDriftDetector
 
 
@@ -178,3 +179,68 @@ class D3(DriftDetector):
             self.window.append(element)
         if len(self.window) > self.max_window_size:
             self.window = self.window[-self.max_window_size:]
+
+
+class LDD_DIS(RegionalDriftDetector):
+    def __init__(self, batch_size: int = 200, roh: float = 0.1, alpha: float = 0.05):
+        """
+        From the paper 'Regional Concept Drift Detection and Density Synchronized Drift Adaptation'
+        https://www.ijcai.org/proceedings/2017/0317.pdf
+        :param batch_size: The size of the tumbling window
+        :param roh: The relative number of nearest neighbors (roh * 2*batch_size)
+        :param alpha: the significance level
+        """
+        self.batch_size = batch_size
+        self.roh = roh
+        self.alpha = alpha
+        self.n_seen_elements = 0
+        self.batch_1 = None
+        self.batch_2 = None
+        self.last_change_point = None
+        self.last_detection_point = None
+        self.drift_dims = []
+        super(LDD_DIS, self).__init__()
+
+    def add_element(self, input_value):
+        assert len(input_value) == self.batch_size
+        self.n_seen_elements += 1
+        self.in_concept_change = False
+        if self.batch_2 is not None:
+            self.batch_1 = self.batch_2
+        self.batch_2 = input_value
+        if self.batch_1 is None or self.batch_2 is None:
+            return
+        D = np.concatenate([self.batch_1, self.batch_2], axis=0)
+        k = int(self.roh * len(D))
+        knn = NearestNeighbors(n_neighbors=k+1).fit(D)
+        neighbors = knn.kneighbors(D)[1]  # contains the indices of the k nearest neighbors
+
+        # Estimate thresholds
+        all_indices = [i for i in range(len(D))]
+        D1_star = np.random.choice(all_indices, len(self.batch_1))
+        D2_star = np.delete(all_indices, D1_star)
+        delta_star = [np.nan for _ in range(len(D))]
+        for data_index in all_indices:
+            neigh = neighbors[data_index]
+            intersect_2 = len(np.intersect1d(neigh, D2_star))
+            intersect_1 = len(np.intersect1d(neigh, D1_star))
+            delta_i_star = intersect_2 / intersect_1 - 1.0 if data_index in D1_star else intersect_1 / intersect_2 - 1.0
+            delta_star[data_index] = delta_i_star
+        std = np.std(delta_star)
+        theta_dec = norm.ppf(self.alpha, loc=0, scale=std)
+        theta_inc = norm.ppf(1 - self.alpha, loc=0, scale=std)
+
+        # Compute LDD for original distributions
+        D1 = all_indices[:len(self.batch_1)]
+        D2 = all_indices[len(self.batch_1):]
+        for data_index in all_indices:
+            neigh = neighbors[data_index]
+            intersect_2 = len(np.intersect1d(neigh, D2))
+            intersect_1 = len(np.intersect1d(neigh, D1))
+            delta_i = intersect_2 / intersect_1 if data_index in D1 else intersect_1 / intersect_2
+            self.drift_dims.append(0 if theta_dec < delta_i <= theta_inc else 1)
+        self.in_concept_change = np.any(self.drift_dims)
+        if self.in_concept_change:
+            self.delay = len(self.batch_2)
+            self.last_detection_point = self.n_seen_elements
+            self.last_change_point = self.n_seen_elements - self.delay
