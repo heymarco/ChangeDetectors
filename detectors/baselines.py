@@ -30,10 +30,11 @@ class AdwinK(RegionalDriftDetector):
             self._detectors = [ADWIN(delta=self.delta) for _ in range(ndims)]
         for dim in range(input_value.shape[-1]):
             values = input_value[:, dim]  # we assume batches
-            self._detectors[dim].add_element(values)
-            if self._detectors[dim].in_concept_change:
-                changes.append(dim)
-        self._metric = len(changes) / ndims
+            for v in values:
+                self._detectors[dim].add_element(v)
+                if self._detectors[dim].in_concept_change:
+                    changes.append(dim)
+        self._metric = len(np.unique(changes)) / ndims
         if self._metric > self.k:
             self.in_concept_change = True
             self.last_detection_point = self.n_seen_elements
@@ -336,11 +337,3 @@ class IBDD(DriftDetector):
 
     def metric(self):
         return self._metric
-
-
-class IBDD2(IBDD):
-    def add_element(self, input_value):
-        super(IBDD2, self).add_element(input_value)
-        if self.in_concept_change:
-            self.pre_train(self.window[-self.m:])
-
