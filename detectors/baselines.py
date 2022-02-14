@@ -295,18 +295,18 @@ class IBDD(DriftDetector):
             self.last_update = self.n_seen_elements
 
         if all(i >= self.upper_thresh for i in self.msd_scores[-self.m:]):
-            superior_threshold = self.msd_scores[-1] + np.std(self.msd_scores[-50:-1])
-            inferior_threshold = self.msd_scores[-1] - np.mean(self.threshold_diffs)
-            self.threshold_diffs.append(superior_threshold - inferior_threshold)
+            self.upper_thresh = self.msd_scores[-1] + np.std(self.msd_scores[-50:-1])
+            self.lower_thresh = self.msd_scores[-1] - np.mean(self.threshold_diffs)
+            self.threshold_diffs.append(self.upper_thresh - self.lower_thresh)
             self.in_concept_change = True
             self.delay = subwindow_size
             self.last_change_point = self.n_seen_elements - subwindow_size
             self.last_detection_point = self.n_seen_elements
             self.last_update = self.n_seen_elements
         elif all(i <= self.lower_thresh for i in self.msd_scores[-self.m:]):
-            inferior_threshold = self.msd_scores[-1] - np.std(self.msd_scores[-50:-1])
-            superior_threshold = self.msd_scores[-1] + np.mean(self.msd_scores)
-            self.threshold_diffs.append(superior_threshold - inferior_threshold)
+            self.lower_thresh = self.msd_scores[-1] - np.std(self.msd_scores[-50:-1])
+            self.upper_thresh = self.msd_scores[-1] + np.mean(self.msd_scores)
+            self.threshold_diffs.append(self.upper_thresh - self.lower_thresh)
             self.in_concept_change = True
             self.delay = subwindow_size
             self.last_change_point = self.n_seen_elements - subwindow_size
