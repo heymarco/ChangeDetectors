@@ -253,7 +253,7 @@ class LDDDIS(DriftDetector):
         return np.nan
 
 
-class IBDD(RegionalDriftDetector):
+class IBDD(DriftDetector):
     def __init__(self, w: int = 200, m: int = 10):
         self.w = w
         self.window = []
@@ -266,11 +266,14 @@ class IBDD(RegionalDriftDetector):
         self.last_detection_point = None
         self.n_seen_elements = 0
         self.last_update = 0
+        super(IBDD, self).__init__()
 
     def pre_train(self, data):
         self.find_initial_threshold(np.array(data), n_runs=100)
 
     def add_element(self, input_value):
+        self.n_seen_elements += len(input_value)
+        self.in_concept_change = False
         for input in input_value:
             self.window.append(input)
         if len(self.window) > self.w:
@@ -282,6 +285,7 @@ class IBDD(RegionalDriftDetector):
         w2 = np.asarray(self.window[subwindow_size:])
         msd = self.msd(w1, w2)
         self.msd_scores.append(msd)
+        self._metric = msd
         outside_thresh = np.logical_or(
             self.msd_scores[-self.m:] > self.upper_thresh,
             self.msd_scores[-self.m:] < self.lower_thresh
@@ -318,3 +322,6 @@ class IBDD(RegionalDriftDetector):
         self.msd_scores = scores
         self.lower_thresh = threshold2
         self.upper_thresh = threshold1
+
+    def metric(self):
+        return self._metric
