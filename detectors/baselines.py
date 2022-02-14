@@ -181,7 +181,7 @@ class D3(DriftDetector):
             self.window = self.window[-self.max_window_size:]
 
 
-class LDD_DIS(RegionalDriftDetector):
+class LDDDIS(DriftDetector):
     def __init__(self, batch_size: int = 200, roh: float = 0.1, alpha: float = 0.05):
         """
         From the paper 'Regional Concept Drift Detection and Density Synchronized Drift Adaptation'
@@ -233,14 +233,22 @@ class LDD_DIS(RegionalDriftDetector):
         # Compute LDD for original distributions
         D1 = all_indices[:len(self.batch_1)]
         D2 = all_indices[len(self.batch_1):]
+        delta = []
         for data_index in all_indices:
             neigh = neighbors[data_index]
             intersect_2 = len(np.intersect1d(neigh, D2))
             intersect_1 = len(np.intersect1d(neigh, D1))
             delta_i = intersect_2 / intersect_1 if data_index in D1 else intersect_1 / intersect_2
+            delta.append(delta_i)
             self.drift_dims.append(0 if theta_dec < delta_i <= theta_inc else 1)
         self.in_concept_change = np.any(self.drift_dims)
         if self.in_concept_change:
             self.delay = len(self.batch_2)
             self.last_detection_point = self.n_seen_elements
             self.last_change_point = self.n_seen_elements - self.delay
+
+    def pre_train(self, data):
+        pass
+
+    def metric(self):
+        return np.nan
