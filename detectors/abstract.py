@@ -6,18 +6,25 @@ from skmultiflow.drift_detection.base_drift_detector import BaseDriftDetector
 class DriftDetector(BaseDriftDetector, ABC):
     @abstractmethod
     def pre_train(self, data):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abstractmethod
     def metric(self):
-        raise NotImplementedError()
+        raise NotImplementedError
+
+    def name(self) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def parameter_str(self) -> str:
+        raise NotImplementedError
 
 
 class RegionalDriftDetector(DriftDetector, ABC):
     @abstractmethod
     def find_drift_dimensions(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abstractmethod
     def plot_drift_dimensions(self):
-        raise NotImplementedError()
+        raise NotImplementedError

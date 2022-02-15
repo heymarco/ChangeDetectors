@@ -1,5 +1,3 @@
-from abc import ABC
-
 import numpy as np
 from scipy.stats import wasserstein_distance, norm
 from skmultiflow.drift_detection import ADWIN
@@ -27,7 +25,8 @@ class AdwinK(RegionalDriftDetector):
         changes = []
         self.n_seen_elements += 1
         if self._detectors is None:
-            self._detectors = [ADWIN(delta=self.delta) for _ in range(ndims)]
+            self._detectors = [ADWIN(delta=self.delta)
+                               for _ in range(ndims)]
         for dim in range(input_value.shape[-1]):
             values = input_value[:, dim]  # we assume batches
             for v in values:
@@ -57,6 +56,12 @@ class AdwinK(RegionalDriftDetector):
     def pre_train(self, data):
         pass
 
+    def name(self) -> str:
+        return "AdwinK"
+
+    def parameter_str(self) -> str:
+        return r"$k = {}, \delta = {}$".format(self.k, self.delta)
+
 
 class WATCH(DriftDetector):
     def __init__(self, kappa: int = 100, mu: int = 1000, epsilon: float = 3, omega: int = 50):
@@ -79,6 +84,12 @@ class WATCH(DriftDetector):
         self.last_detection_point = None
         self._v = np.nan
         super(WATCH, self).__init__()
+
+    def name(self) -> str:
+        return "WATCH"
+
+    def parameter_str(self) -> str:
+        return r"$\kappa = {}, \mu = {}, \epsilon = {}, \omega = {}$".format(self.kappa, self.mu, self.epsilon, self.omega)
 
     def _wasserstein(self, B_i, D) -> float:
         dist = [wasserstein_distance(B_i[:, j], D[:, j]) for j in range(B_i.shape[-1])]
@@ -148,6 +159,12 @@ class D3(DriftDetector):
         self._metric = 0.5
         super(D3, self).__init__()
 
+    def name(self) -> str:
+        return "D3"
+
+    def parameter_str(self) -> str:
+        return r"$\omega = {}, \roh = {}, \tau = {}$".format(self.w, self.roh, self.tau)
+
     def pre_train(self, data):
         pass
 
@@ -201,6 +218,12 @@ class LDDDIS(DriftDetector):
         self.last_detection_point = None
         self.drift_dims = []
         super(LDDDIS, self).__init__()
+
+    def name(self) -> str:
+        return "LDD-DIS"
+
+    def parameter_str(self) -> str:
+        return r"$b = {}, \roh = {}, \alpha = {}$".format(self.batch_size, self.roh, self.alpha)
 
     def add_element(self, input_value):
         self.n_seen_elements += len(input_value)
@@ -269,6 +292,12 @@ class IBDD(DriftDetector):
         self.last_update = 0
         self.threshold_diffs = []
         super(IBDD, self).__init__()
+
+    def name(self) -> str:
+        return "IBDD"
+
+    def parameter_str(self) -> str:
+        return r"$\omega = {}, m = {}$".format(self.w, self.m)
 
     def pre_train(self, data):
         self.find_initial_threshold(np.array(data), n_runs=100)
