@@ -136,8 +136,7 @@ class WATCH(DriftDetector):
 
 
 class D3(DriftDetector):
-    def __init__(self, w: int = 100, roh: float = 0.5, tau: float = 0.7,
-                 classifier=DecisionTreeClassifier(max_depth=1)):
+    def __init__(self, w: int = 100, roh: float = 0.5, tau: float = 0.7, tree_depth: int = 3):
         """
         Unsupervised Concept Drift Detection with a Discriminative Classifier
         https://dl.acm.org/doi/10.1145/3357384.3358144
@@ -147,7 +146,8 @@ class D3(DriftDetector):
         :param roh: the relative size of the new window compared to the old window
         :param tau: the threshold of the area under the ROC.
         """
-        self.classifier = classifier
+        self.classifier = DecisionTreeClassifier(max_depth=tree_depth)
+        self.depth = tree_depth
         self.w = w
         self.roh = roh
         self.tau = tau
@@ -163,7 +163,7 @@ class D3(DriftDetector):
         return "D3"
 
     def parameter_str(self) -> str:
-        return r"$\omega = {}, \roh = {}, \tau = {}$".format(self.w, self.roh, self.tau)
+        return r"$\omega = {}, \roh = {}, \tau = {}, d = {}$".format(self.w, self.roh, self.tau, self.depth)
 
     def pre_train(self, data):
         pass
