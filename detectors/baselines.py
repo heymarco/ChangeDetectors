@@ -105,7 +105,7 @@ class WATCH(DriftDetector):
             self.n_seen_elements += 1
             self.B.append(item)
             if len(self.B) == self.omega:
-                self._process_batch(self.B)
+                self._process_batch(np.asarray(self.B))
                 self.B = []
 
     def _process_batch(self, batch):
