@@ -83,6 +83,7 @@ class WATCH(DriftDetector):
         self.last_change_point = None
         self.last_detection_point = None
         self._v = np.nan
+        self.B = []
         super(WATCH, self).__init__()
 
     def name(self) -> str:
@@ -96,30 +97,32 @@ class WATCH(DriftDetector):
         return np.mean(dist)
 
     def pre_train(self, data: np.ndarray):
-        if len(data.shape) == 2:
-            if len(data) % self.omega != 0:
-                data = data[:-len(data) % self.omega]
-            data.reshape(shape=(int(len(data) / self.omega), self.omega, data.shape[-1]))
-        for batch in data:
-            self.add_element(batch)
+        self.add_element(data)
 
     def add_element(self, input_value):
         self.in_concept_change = False
-        self.n_seen_elements += self.omega
+        for item in input_value:
+            self.n_seen_elements += 1
+            self.B.append(item)
+            if len(self.B) == self.omega:
+                self._process_batch(self.B)
+                self.B = []
+
+    def _process_batch(self, batch):
         if len(self._D_concatenated()) < self.kappa:
-            self.D.append(input_value)
+            self.D.append(batch)
             if len(self._D_concatenated()) >= self.kappa:
                 self._update_eta()
         else:
-            self._v = self._wasserstein(input_value, self._D_concatenated())
+            self._v = self._wasserstein(batch, self._D_concatenated())
             if self._v > self.eta:
                 self.in_concept_change = True
                 self.last_detection_point = self.n_seen_elements
                 self.last_change_point = self.n_seen_elements
-                self.D = [input_value]
+                self.D = [batch]
             else:
                 if len(self._D_concatenated()) < self.mu:
-                    self.D.append(input_value)
+                    self.D.append(batch)
                     self._update_eta()
 
     def _D_concatenated(self):
