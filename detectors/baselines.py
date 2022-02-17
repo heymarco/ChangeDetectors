@@ -44,11 +44,8 @@ class AdwinK(RegionalDriftDetector):
             self._drift_dims = np.zeros(ndims)
             self._drift_dims[changes] = 1
 
-    def find_drift_dimensions(self):
-        return self._drift_dims
-
-    def plot_drift_dimensions(self):
-        pass
+    def get_drift_dims(self) -> np.ndarray:
+        return np.array([i for i in range(len(self._drift_dims)) if self._drift_dims[i]])
 
     def metric(self):
         return self._metric

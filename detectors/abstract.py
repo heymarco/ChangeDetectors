@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+import numpy as np
 from skmultiflow.drift_detection.base_drift_detector import BaseDriftDetector
 
 
@@ -22,9 +23,5 @@ class DriftDetector(BaseDriftDetector, ABC):
 
 class RegionalDriftDetector(DriftDetector, ABC):
     @abstractmethod
-    def find_drift_dimensions(self):
-        raise NotImplementedError
-
-    @abstractmethod
-    def plot_drift_dimensions(self):
+    def get_drift_dims(self) -> np.ndarray:
         raise NotImplementedError
