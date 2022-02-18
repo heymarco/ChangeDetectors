@@ -31,7 +31,7 @@ class AdwinK(RegionalDriftDetector):
             values = input_value[:, dim]  # we assume batches
             for v in values:
                 self._detectors[dim].add_element(v)
-                if self._detectors[dim].in_concept_change:
+                if self._detectors[dim].detected_change():
                     changes.append(dim)
         self._metric = len(np.unique(changes)) / ndims
         if self._metric > self.k:
