@@ -163,7 +163,7 @@ class D3(DriftDetector):
         return "D3"
 
     def parameter_str(self) -> str:
-        return r"$\omega = {}, \roh = {}, \tau = {}, d = {}$".format(self.w, self.roh, self.tau, self.depth)
+        return r"$\omega = {}, \rho = {}, \tau = {}, d = {}$".format(self.w, self.roh, self.tau, self.depth)
 
     def pre_train(self, data):
         pass
