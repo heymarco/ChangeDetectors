@@ -27,9 +27,3 @@ class RegionalDriftDetector(DriftDetector, ABC):
     def get_drift_dims(self) -> np.ndarray:
         raise NotImplementedError
 
-
-@runtime_checkable
-class QuantifiesSeverity(Protocol):
-    def get_severity(self):
-        raise NotImplementedError
-
