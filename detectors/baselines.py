@@ -7,6 +7,7 @@ from sklearn.neighbors import NearestNeighbors
 from .abstract import DriftDetector, RegionalDriftDetector
 
 
+# has delay
 class AdwinK(RegionalDriftDetector):
     def __init__(self, delta: float, k: float = 0.1):
         self.delta = delta
@@ -22,11 +23,11 @@ class AdwinK(RegionalDriftDetector):
     def add_element(self, input_value):
         ndims = input_value.shape[-1]
         self.in_concept_change = False
-        changes = []
         self.n_seen_elements += 1
         if self._detectors is None:
             self._detectors = [ADWIN(delta=self.delta)
                                for _ in range(ndims)]
+        changes = []
         for dim in range(input_value.shape[-1]):
             values = input_value[:, dim]  # we assume batches
             for v in values:
@@ -60,6 +61,7 @@ class AdwinK(RegionalDriftDetector):
         return r"$k = {}, \delta = {}$".format(self.k, self.delta)
 
 
+# has delay
 class WATCH(DriftDetector):
     def __init__(self, kappa: int = 100, mu: int = 1000, epsilon: float = 3, omega: int = 50):
         """
@@ -115,7 +117,8 @@ class WATCH(DriftDetector):
             if self._v > self.eta:
                 self.in_concept_change = True
                 self.last_detection_point = self.n_seen_elements
-                self.last_change_point = self.n_seen_elements
+                self.last_change_point = self.n_seen_elements - len(batch)
+                self.delay = len(batch)
                 self.D = [batch]
             else:
                 if len(self._D_concatenated()) < self.mu:
@@ -135,6 +138,7 @@ class WATCH(DriftDetector):
         return self._v
 
 
+# has delay
 class D3(DriftDetector):
     def __init__(self, w: int = 100, roh: float = 0.5, tau: float = 0.7, tree_depth: int = 3):
         """
@@ -184,7 +188,8 @@ class D3(DriftDetector):
             if self._metric >= self.tau:
                 self.in_concept_change = True
                 self.last_detection_point = self.n_seen_elements
-                self.last_change_point = self.n_seen_elements - int(self.w * self.roh)
+                self.delay = int(self.w * self.roh)
+                self.last_change_point = self.n_seen_elements - self.delay
                 self.window = self.window[-self.w:]
             else:
                 self.window = self.window[-int(self.w * self.roh):]
@@ -199,6 +204,7 @@ class D3(DriftDetector):
             self.window = self.window[-self.max_window_size:]
 
 
+# has delay
 class LDDDIS(DriftDetector):
     def __init__(self, batch_size: int = 200, roh: float = 0.1, alpha: float = 0.05):
         """
@@ -276,7 +282,7 @@ class LDDDIS(DriftDetector):
     def metric(self):
         return np.nan
 
-
+# has delay
 class IBDD(DriftDetector):
     def __init__(self, w: int = 200, m: int = 10):
         self.w = w
