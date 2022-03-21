@@ -4,7 +4,7 @@ from skmultiflow.drift_detection import ADWIN
 from sklearn.metrics import roc_auc_score
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import NearestNeighbors
-from .abstract import DriftDetector, RegionalDriftDetector
+from .abstract import DriftDetector, RegionalDriftDetector, QuantifiesSeverity
 
 
 # has delay
@@ -62,7 +62,7 @@ class AdwinK(RegionalDriftDetector):
 
 
 # has delay
-class WATCH(DriftDetector):
+class WATCH(DriftDetector, QuantifiesSeverity):
     def __init__(self, kappa: int = 100, mu: int = 1000, epsilon: float = 3, omega: int = 50):
         """
         WATCH: Wasserstein Change Point Detection for High-Dimensional Time Series Data
@@ -137,9 +137,12 @@ class WATCH(DriftDetector):
     def metric(self):
         return self._v
 
+    def get_severity(self):
+        return self.metric()
+
 
 # has delay
-class D3(DriftDetector):
+class D3(DriftDetector, QuantifiesSeverity):
     def __init__(self, w: int = 100, roh: float = 0.5, tau: float = 0.7, tree_depth: int = 3):
         """
         Unsupervised Concept Drift Detection with a Discriminative Classifier
@@ -196,6 +199,9 @@ class D3(DriftDetector):
 
     def metric(self):
         return self._metric
+
+    def get_severity(self):
+        return self.metric()
 
     def _update_window(self, new_value):
         for element in new_value:
@@ -282,8 +288,9 @@ class LDDDIS(DriftDetector):
     def metric(self):
         return np.nan
 
+
 # has delay
-class IBDD(DriftDetector):
+class IBDD(DriftDetector, QuantifiesSeverity):
     def __init__(self, w: int = 200, m: int = 10):
         self.w = w
         self.window = []
@@ -372,3 +379,6 @@ class IBDD(DriftDetector):
 
     def metric(self):
         return self._metric
+
+    def get_severity(self):
+        return self.metric()
