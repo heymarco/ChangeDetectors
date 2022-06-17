@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.stats import wasserstein_distance, norm
+from sklearn.linear_model import LogisticRegression
 from skmultiflow.drift_detection import ADWIN
 from sklearn.metrics import roc_auc_score
 from sklearn.tree import DecisionTreeClassifier
@@ -153,7 +154,8 @@ class D3(DriftDetector, QuantifiesSeverity):
         :param roh: the relative size of the new window compared to the old window
         :param tau: the threshold of the area under the ROC.
         """
-        self.classifier = DecisionTreeClassifier(max_depth=tree_depth)
+        self.classifier = LogisticRegression()
+        # self.classifier = DecisionTreeClassifier(max_depth=tree_depth)
         self.depth = tree_depth
         self.w = w
         self.roh = roh
