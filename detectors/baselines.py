@@ -9,6 +9,10 @@ from .abstract import DriftDetector, RegionalDriftDetector, QuantifiesSeverity
 
 
 # has delay
+from .iks.IKS import IKS
+from .iks.IKSSW import IKSSW
+
+
 class AdwinK(RegionalDriftDetector):
     def __init__(self, delta: float, k: float = 0.1):
         self.delta = delta
@@ -338,7 +342,6 @@ class IBDD(DriftDetector, QuantifiesSeverity):
             self.lower_thresh = np.mean(self.msd_scores[-50:]) - 2 * np.std(self.msd_scores[-50:])
             self.threshold_diffs.append(self.upper_thresh - self.lower_thresh)
             self.last_update = self.n_seen_elements
-
         if all(i >= self.upper_thresh for i in self.msd_scores[-self.m:]):
             self.upper_thresh = self.msd_scores[-1] + np.std(self.msd_scores[-50:-1])
             self.lower_thresh = self.msd_scores[-1] - np.mean(self.threshold_diffs)
@@ -384,3 +387,62 @@ class IBDD(DriftDetector, QuantifiesSeverity):
 
     def get_severity(self):
         return self.metric()
+
+
+class IncrementalKS(DriftDetector, RegionalDriftDetector):
+    def __init__(self, w: int = 100, delta: float = 0.05, k: float = 0):
+        self.k = k
+        self.w = w
+        self.delta = delta
+        self._models = None
+        self.last_change_point = None
+        self.last_detection_point = None
+        self.n_seen_elements = 0
+        self._initial_instances = np.array([], dtype=float)
+        self._drift_dims = []
+        super(IncrementalKS, self).__init__()
+
+    def pre_train(self, data):
+        self.n_seen_elements += len(data)
+        data = np.array(data)
+        if len(data) < self.w:
+            self._initial_instances = data
+        else:
+            self._initial_instances = data[:self.w]
+            self._models = [
+                IKSSW(self._initial_instances[:, i] for i in range(self._initial_instances.shape[-1]))
+            ]
+
+    def add_element(self, input_value):
+        self.n_seen_elements += 1
+        self.in_concept_change = False
+        if len(self._initial_instances) < self.w:
+            self._initial_instances = np.append(self._initial_instances, [input_value], axis=0)
+            if len(self._initial_instances) == self.w and self._models is None:
+                self._models = [
+                    IKSSW(self._initial_instances[:, i] for i in range(self._initial_instances.shape[-1]))
+                ]
+            return
+        [m.Increment(d) for m, d in zip(self._models, input_value)]
+        changes = [m.Test(IKS.CAForPValue(self.delta)) for m in self._models]
+        self._drift_dims = changes
+        if np.sum(changes) > max(1, int(self.k * len(changes))):
+            self.in_concept_change = True
+            self.delay = self.w
+            self.last_change_point = self.n_seen_elements - self.w
+            self.last_detection_point = self.n_seen_elements
+            [m.Update() for m in self._models]
+
+    def get_drift_dims(self) -> np.ndarray:
+        return np.array([i for i in range(len(self._drift_dims)) if self._drift_dims[i]])
+
+    def metric(self):
+        return np.nan
+
+    def name(self) -> str:
+        return "IKS"
+
+    def parameter_str(self) -> str:
+        return r"$W = {}, \delta = {}, k = {}$".format(self.W, self.delta, self.k)
+
+
