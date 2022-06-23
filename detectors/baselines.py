@@ -148,7 +148,7 @@ class WATCH(DriftDetector, QuantifiesSeverity):
 
 # has delay
 class D3(DriftDetector, QuantifiesSeverity):
-    def __init__(self, w: int = 100, roh: float = 0.5, tau: float = 0.7, tree_depth: int = 3):
+    def __init__(self, w: int = 100, roh: float = 0.5, tau: float = 0.7, model_id: str = "lr", tree_depth: int = 3):
         """
         Unsupervised Concept Drift Detection with a Discriminative Classifier
         https://dl.acm.org/doi/10.1145/3357384.3358144
@@ -158,8 +158,13 @@ class D3(DriftDetector, QuantifiesSeverity):
         :param roh: the relative size of the new window compared to the old window
         :param tau: the threshold of the area under the ROC.
         """
-        self.classifier = LogisticRegression()
-        # self.classifier = DecisionTreeClassifier(max_depth=tree_depth)
+        self.model_id = model_id
+        if self.model_id == "lr":
+            self.classifier = LogisticRegression()
+        elif self.model_id == "dt":
+            self.classifier = DecisionTreeClassifier(max_depth=tree_depth)
+        else:
+            raise ValueError
         self.depth = tree_depth
         self.w = w
         self.roh = roh
@@ -176,7 +181,9 @@ class D3(DriftDetector, QuantifiesSeverity):
         return "D3"
 
     def parameter_str(self) -> str:
-        return r"$\omega = {}, \rho = {}, \tau = {}, d = {}$".format(self.w, self.roh, self.tau, self.depth)
+        return r"$\omega = {}, \rho = {}, \tau = {}, d = {}$, model = {}".format(self.w, self.roh,
+                                                                                 self.tau, self.depth,
+                                                                                 self.model_id)
 
     def pre_train(self, data):
         pass
