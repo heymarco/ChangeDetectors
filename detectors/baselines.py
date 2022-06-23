@@ -389,7 +389,7 @@ class IBDD(DriftDetector, QuantifiesSeverity):
         return self.metric()
 
 
-class IncrementalKS(DriftDetector, RegionalDriftDetector):
+class IncrementalKS(RegionalDriftDetector):
     def __init__(self, w: int = 100, delta: float = 0.05, k: float = 0):
         self.k = k
         self.w = w
@@ -410,20 +410,23 @@ class IncrementalKS(DriftDetector, RegionalDriftDetector):
         else:
             self._initial_instances = data[:self.w]
             self._models = [
-                IKSSW(self._initial_instances[:, i] for i in range(self._initial_instances.shape[-1]))
+                IKSSW(self._initial_instances[:, i]) for i in range(self._initial_instances.shape[-1])
             ]
+            for point in data[self.w:]:
+                [m.Increment(d) for m, d in zip(self._models, point)]
 
     def add_element(self, input_value):
-        self.n_seen_elements += 1
+        self.n_seen_elements += len(input_value)
         self.in_concept_change = False
-        if len(self._initial_instances) < self.w:
-            self._initial_instances = np.append(self._initial_instances, [input_value], axis=0)
+        if len(self._initial_instances) <= self.w:
+            self._initial_instances = np.append(self._initial_instances, input_value, axis=0)
             if len(self._initial_instances) == self.w and self._models is None:
                 self._models = [
-                    IKSSW(self._initial_instances[:, i] for i in range(self._initial_instances.shape[-1]))
+                    IKSSW(self._initial_instances[:, i]) for i in range(self._initial_instances.shape[-1])
                 ]
             return
-        [m.Increment(d) for m, d in zip(self._models, input_value)]
+        for point in input_value:
+            [m.Increment(d) for m, d in zip(self._models, point)]
         changes = [m.Test(IKS.CAForPValue(self.delta)) for m in self._models]
         self._drift_dims = changes
         if np.sum(changes) > max(1, int(self.k * len(changes))):
@@ -443,6 +446,6 @@ class IncrementalKS(DriftDetector, RegionalDriftDetector):
         return "IKS"
 
     def parameter_str(self) -> str:
-        return r"$W = {}, \delta = {}, k = {}$".format(self.W, self.delta, self.k)
+        return r"$W = {}, \delta = {}, k = {}$".format(self.w, self.delta, self.k)
 
 

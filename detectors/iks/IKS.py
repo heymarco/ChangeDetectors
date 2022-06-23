@@ -1,4 +1,4 @@
-from Treap import Treap
+from .Treap import Treap
 from math import log
 
 

@@ -1,4 +1,4 @@
-from IKS import IKS
+from .IKS import IKS
 from collections import deque
 from random import random
 
