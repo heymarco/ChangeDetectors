@@ -324,7 +324,7 @@ class IBDD(DriftDetector, QuantifiesSeverity):
         return "IBDD"
 
     def parameter_str(self) -> str:
-        return r"$\omega = {}, m = {}$".format(self.w, self.m)
+        return r"$\omega = {}, m = {}, std = {}$".format(self.w, self.m, self.std)
 
     def pre_train(self, data):
         self.find_initial_threshold(np.array(data), n_runs=100)
