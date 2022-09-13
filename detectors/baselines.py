@@ -304,7 +304,8 @@ class LDDDIS(DriftDetector):
 
 # has delay
 class IBDD(DriftDetector, QuantifiesSeverity):
-    def __init__(self, w: int = 200, m: int = 10):
+    def __init__(self, w: int = 200, m: int = 10, std: float = 2):
+        self.std = std
         self.w = w
         self.window = []
         self._metric = np.nan
@@ -345,8 +346,8 @@ class IBDD(DriftDetector, QuantifiesSeverity):
         self._metric = msd
 
         if self.n_seen_elements - self.last_update > 60:
-            self.upper_thresh = np.mean(self.msd_scores[-50:]) + 2 * np.std(self.msd_scores[-50:])
-            self.lower_thresh = np.mean(self.msd_scores[-50:]) - 2 * np.std(self.msd_scores[-50:])
+            self.upper_thresh = np.mean(self.msd_scores[-50:]) + self.std * np.std(self.msd_scores[-50:])
+            self.lower_thresh = np.mean(self.msd_scores[-50:]) - self.std * np.std(self.msd_scores[-50:])
             self.threshold_diffs.append(self.upper_thresh - self.lower_thresh)
             self.last_update = self.n_seen_elements
         if all(i >= self.upper_thresh for i in self.msd_scores[-self.m:]):
