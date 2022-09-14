@@ -24,7 +24,7 @@ setup(name='change-detectors',
       classifiers=CLASSIFIERS,
       python_requires=">=3.7",
       packages=["detectors"],
-      install_requires=["scikit-multiflow", "river", "numpy", "pandas", "tensorflow", "bocd"],
+      install_requires=["scikit-multiflow", "river", "numpy", "pandas", "tensorflow"],
       extras_require={
         'plots':  ["matplotlib>=2.0.0", "seaborn"]
         }

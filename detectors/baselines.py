@@ -5,7 +5,7 @@ from skmultiflow.drift_detection import ADWIN
 from sklearn.metrics import roc_auc_score
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import NearestNeighbors
-from bocd import BayesianOnlineChangePointDetection, StudentT, ConstantHazard
+from sdt.changepoint import BayesOnline
 from .abstract import DriftDetector, RegionalDriftDetector, QuantifiesSeverity
 
 
@@ -461,7 +461,8 @@ class IncrementalKS(RegionalDriftDetector):
 
 class BayesianOnlineDetector(DriftDetector):
     def __init__(self, threshold: float = 0.05, time_scale: float = 250,
-                 alpha=1.0, beta=1.0, kappa=1.0, mu=0.0):
+                 alpha=1.0, beta=1.0, kappa=1.0, mu=0.0, past=3):
+        self.past = 3
         self.threshold = threshold
         self.time_scale = time_scale
         self.alpha = alpha
@@ -470,8 +471,7 @@ class BayesianOnlineDetector(DriftDetector):
         self.mu = mu
         self._hazard_params = {"time_scale": self.time_scale}
         self._obs_params = {"alpha": alpha, "beta": beta, "kappa": kappa, "mu": mu}
-        self.detector = BayesianOnlineChangePointDetection(ConstantHazard(time_scale),
-                                                           StudentT(mu=mu, kappa=kappa, alpha=alpha, beta=beta))
+        self.detector = BayesOnline(hazard_params=self._hazard_params, obs_params=self._obs_params)
         self.n_seen_elements = 0
         self.last_change_point = None
         self.last_detection_point = None
@@ -486,11 +486,10 @@ class BayesianOnlineDetector(DriftDetector):
             self.n_seen_elements += 1
             self._digested_elements += 1
             self.detector.update(point)
-            self._prev_rt = self.detector.rt
 
     def metric(self):
-        if self.n_seen_elements > self._len_warm_start:
-            return self.detector.rt
+        if self.n_seen_elements > self._len_warm_start + self.past:
+            return self.detector.get_probabilities(past=self.past)[-1]
         else:
             return np.nan
 
@@ -510,12 +509,11 @@ class BayesianOnlineDetector(DriftDetector):
         self.detector.update(x)
         self.n_seen_elements += 1
         self._digested_elements += 1
-        rt = self.detector.rt
-        self.in_concept_change = rt < self._prev_rt
-        self._prev_rt = rt
+        prob = self.detector.get_probabilities(past=self.past)[-1]
+        self.in_concept_change = prob > 1 - self.threshold
         if self.in_concept_change:
-            self.delay = 0
+            self.delay = self.past
             self.last_change_point = self.n_seen_elements - self.delay
             self.last_detection_point = self.n_seen_elements
-            self.detector.reset_params()
+            self.detector.reset()
             self._digested_elements = 0
