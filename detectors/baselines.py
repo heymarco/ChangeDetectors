@@ -5,6 +5,7 @@ from skmultiflow.drift_detection import ADWIN
 from sklearn.metrics import roc_auc_score
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import NearestNeighbors
+from bocd import BayesianOnlineChangePointDetection, StudentT, ConstantHazard
 from .abstract import DriftDetector, RegionalDriftDetector, QuantifiesSeverity
 
 
@@ -456,3 +457,65 @@ class IncrementalKS(RegionalDriftDetector):
 
     def parameter_str(self) -> str:
         return r"$W = {}, \delta = {}, k = {}$".format(self.w, self.delta, self.k)
+
+
+class BayesianOnlineDetector(DriftDetector):
+    def __init__(self, threshold: float = 0.05, time_scale: float = 250,
+                 alpha=1.0, beta=1.0, kappa=1.0, mu=0.0):
+        self.threshold = threshold
+        self.time_scale = time_scale
+        self.alpha = alpha
+        self.beta = beta
+        self.kappa = kappa
+        self.mu = mu
+        self._hazard_params = {"time_scale": self.time_scale}
+        self._obs_params = {"alpha": alpha, "beta": beta, "kappa": kappa, "mu": mu}
+        self.detector = BayesianOnlineChangePointDetection(ConstantHazard(time_scale),
+                                                           StudentT(mu=mu, kappa=kappa, alpha=alpha, beta=beta))
+        self.n_seen_elements = 0
+        self.last_change_point = None
+        self.last_detection_point = None
+        self._len_warm_start = 0
+        self._digested_elements = 0
+        self._prev_rt = np.nan
+        super(BayesianOnlineDetector, self).__init__()
+
+    def pre_train(self, data):
+        self._len_warm_start = len(data)
+        for point in data:
+            self.n_seen_elements += 1
+            self._digested_elements += 1
+            self.detector.update(point)
+            self._prev_rt = self.detector.rt
+
+    def metric(self):
+        if self.n_seen_elements > self._len_warm_start:
+            return self.detector.rt
+        else:
+            return np.nan
+
+    def name(self) -> str:
+        return "BayesOnline"
+
+    def parameter_str(self) -> str:
+        result = "threshold = {}, ".format(self.threshold)
+        for k in self._hazard_params:
+            v = self._hazard_params[k]
+            result += "{} = {}, ".format(k, v)
+        return result
+
+    def add_element(self, input_value):
+        self.in_concept_change = False
+        x = np.array(input_value)
+        self.detector.update(x)
+        self.n_seen_elements += 1
+        self._digested_elements += 1
+        rt = self.detector.rt
+        self.in_concept_change = rt < self._prev_rt
+        self._prev_rt = rt
+        if self.in_concept_change:
+            self.delay = 0
+            self.last_change_point = self.n_seen_elements - self.delay
+            self.last_detection_point = self.n_seen_elements
+            self.detector.reset_params()
+            self._digested_elements = 0
