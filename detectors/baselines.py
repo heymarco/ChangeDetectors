@@ -68,7 +68,7 @@ class AdwinK(RegionalDriftDetector):
 
 # has delay
 class WATCH(DriftDetector, QuantifiesSeverity):
-    def __init__(self, kappa: int = 100, mu: int = 1000, epsilon: float = 3, omega: int = 50):
+    def __init__(self, kappa: int = 100, mu: int = 1000, epsilon: float = 3, omega: int = 50, debug_fixed_eta=False):
         """
         WATCH: Wasserstein Change Point Detection for High-Dimensional Time Series Data
         https://arxiv.org/abs/2201.07125
@@ -83,6 +83,7 @@ class WATCH(DriftDetector, QuantifiesSeverity):
         self.epsilon = epsilon
         self.omega = omega
         self.eta = 0.0
+        self.debug_fixed_eta = debug_fixed_eta
         self.D = []
         self.last_change_point = None
         self.last_detection_point = None
@@ -119,7 +120,7 @@ class WATCH(DriftDetector, QuantifiesSeverity):
                 self._update_eta()
         else:
             self._v = self._wasserstein(batch, self._D_concatenated())
-            if self._v > self.eta:
+            if self._v > (self.debug_fixed_eta if self.debug_fixed_eta else self.eta):
                 self.in_concept_change = True
                 self.last_detection_point = self.n_seen_elements
                 self.last_change_point = self.n_seen_elements - len(batch)
