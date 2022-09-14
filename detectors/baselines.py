@@ -456,5 +456,3 @@ class IncrementalKS(RegionalDriftDetector):
 
     def parameter_str(self) -> str:
         return r"$W = {}, \delta = {}, k = {}$".format(self.w, self.delta, self.k)
-
-
