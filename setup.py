@@ -11,7 +11,6 @@ CLASSIFIERS = ['Intended Audience :: Science/Research',
                'Operating System :: POSIX',
                'Operating System :: Unix',
                'Operating System :: MacOS',
-               'Programming Language :: Python :: 3.6',
                'Programming Language :: Python :: 3.7',
                'Programming Language :: Python :: 3.8']
 
@@ -23,7 +22,7 @@ setup(name='change-detectors',
       license='MIT',
       author='Florian Kalinke, Marco Heyden',
       classifiers=CLASSIFIERS,
-      python_requires=">=3.6",
+      python_requires=">=3.7",
       packages=["detectors"],
       install_requires=["scikit-multiflow", "river", "numpy", "pandas", "tensorflow", "sdt-python"],
       extras_require={
