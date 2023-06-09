@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.stats import wasserstein_distance, norm
+from scipy.stats import norm
 from sklearn.linear_model import LogisticRegression
 from skmultiflow.drift_detection import ADWIN
 from sklearn.metrics import roc_auc_score
@@ -12,6 +12,7 @@ from .abstract import DriftDetector, RegionalDriftDetector, QuantifiesSeverity
 # has delay
 from .iks.IKS import IKS
 from .iks.IKSSW import IKSSW
+from .util import sinkhorn_approx
 
 
 class AdwinK(RegionalDriftDetector):
@@ -99,8 +100,8 @@ class WATCH(DriftDetector, QuantifiesSeverity):
         return r"$\kappa = {}, \mu = {}, \epsilon = {}, \omega = {}$".format(self.kappa, self.mu, self.epsilon, self.omega)
 
     def _wasserstein(self, B_i, D) -> float:
-        dist = [wasserstein_distance(B_i[:, j], D[:, j]) for j in range(B_i.shape[-1])]
-        return np.mean(dist)
+        dist = sinkhorn_approx(B_i, D)
+        return dist
 
     def pre_train(self, data: np.ndarray):
         self.add_element(data)
