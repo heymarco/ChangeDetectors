@@ -151,7 +151,8 @@ class WATCH(DriftDetector, QuantifiesSeverity):
 
 # has delay
 class D3(DriftDetector, QuantifiesSeverity):
-    def __init__(self, w: int = 100, roh: float = 0.5, tau: float = 0.7, model_id: str = "lr", tree_depth: int = 3):
+    def __init__(self, w: int = 100, roh: float = 0.5, tau: float = 0.7, model_id: str = "lr",
+                 tree_depth: int = 3, max_iter: int = 1000):
         """
         Unsupervised Concept Drift Detection with a Discriminative Classifier
         https://dl.acm.org/doi/10.1145/3357384.3358144
@@ -163,7 +164,7 @@ class D3(DriftDetector, QuantifiesSeverity):
         """
         self.model_id = model_id
         if self.model_id == "lr":
-            self.classifier = LogisticRegression()
+            self.classifier = LogisticRegression(max_iter=max_iter)
         elif self.model_id == "dt":
             self.classifier = DecisionTreeClassifier(max_depth=tree_depth)
         else:
